@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Schedules a recurring Amazon Inspector assessment run
+Parameters:
+  TemplateArns:
+    Description: Comma-separated list of Inspector template ARN
+    Type: CommaDelimitedList
+  Schedule:
+    Description: CloudWatch Events schedule for Inspector run
+    Type: String
+    Default: rate(7 days)
+  SlackUrl:
+    Type: String
+    Description: Slack URL to notify Inspector run results
+
+Resources:
+  ScheduledRun:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs6.10
+      CodeUri: ./scheduled-run/
+      Description: Schedules a recurring Amazon Inspector assessment run
+      MemorySize: 128
+      Timeout: 10
+      Role:
+        Fn::GetAtt:
+          - ScheduledRunRole
+          - Arn
+      Events:
+        RunSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref Schedule
+      Environment:
+        Variables:
+          assessmentTemplateArns:
+            Fn::Join:
+              - ","
+              - !Ref TemplateArns
+  ReportingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs6.10
+      CodeUri: ./reporting/
+      Description: Send Inspector report notification
+      MemorySize: 128
+      Timeout: 10
+      Role:
+        Fn::GetAtt:
+          - ReportingFunctionRole
+          - Arn
+      Events:
+        Reporting:
+          Type: SNS
+          Properties:
+            Topic: !Ref ReportingTopic
+      Environment:
+        Variables:
+          SLACK_URL: !Ref SlackUrl
+  ReportingTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: inspector-topic
+  ReportingTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref ReportingTopic
+      PolicyDocument:
+        Id: ReportingTopicPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ForThisAccount
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - SNS:Publish
+              - SNS:RemovePermission
+              - SNS:SetTopicAttributes
+              - SNS:DeleteTopic
+              - SNS:ListSubscriptionsByTopic
+              - SNS:GetTopicAttributes
+              - SNS:Receive
+              - SNS:AddPermission
+              - SNS:Subscribe
+            Resource: !Ref ReportingTopic
+            Condition:
+              StringEquals:
+                'AWS:SourceOwner': !Ref AWS::AccountId
+          - Sid: ForInspector
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::406045910587:root
+            Resource: !Ref ReportingTopic
+            Action:
+              - SNS:Publish
+              - SNS:Subscribe
+              - SNS:Receive
+  ScheduledRunRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: inspector-scheduled-run-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - inspector:StartAssessmentRun
+                Resource: ['*']
+  ReportingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: inspector-scheduled-run-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - inspector:ListFindings
+                Resource: ['*']
