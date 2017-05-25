@@ -41,48 +41,68 @@ exports.handler = (event, context, callback) => {
     return callback(null, null)
   }
 
-  const params = {
-    assessmentRunArns: [message.run],
-    filter: {
-      severities: ["High"]
-    },
-    maxResults: 500
-  };
+  const templateNameP = new Promise((resolve, reject) => {
+    inspector.describeAssessmentTemplates({assessmentTemplateArns: [message.template]}, (error, data) => {
+      if (error) {
+        return reject(error)
+      }
+      return resolve(data)
+    })
+  })
 
-  inspector.listFindings(params, (error, data) => {
-    if (error) {
-      console.log(error, error.stack);
-      return callback(error);
+  const listFindingsP = new Promise((resolve, reject) => {
+    const params = {
+      assessmentRunArns: [message.run],
+      filter: {
+        severities: ["High", "Medium"]
+      },
+      maxResults: 500
     }
 
-    const highCount = data.findingArns.length
+    inspector.listFindings(params, (error, data) => {
+      if (error) {
+        return reject(error)
+      }
+      return resolve(data)
+    })
+  })
+
+  Promise.all([templateNameP, listFindingsP]).then((results) => {
+    const templateName = results[0].assessmentTemplates[0].name
+    const findings = results[1].findingArns
+
+    const highCount = findings.length
     const slackMessage = {
       username: "AWS Inspector Report",
       attachments: [
         {
           pretext: "Assessment Run Completed",
-          text: `${highCount} high severity found\n\nRun ARN: ${message.run}`,
+          text: `${highCount} high severities found\n\nTemplate Name: ${templateName}\nRun ARN: ${message.run}`,
           color: (highCount == 0) ? 'good' : 'warning'
         }
       ]
     }
 
-    console.log(data);
     postMessage(slackMessage, (res) => {
-      callback(null, data);
+      callback(null, results);
     })
-    return data;
+  }).catch((error) => {
+    console.log('Caught Error: ', error)
+    console.log(error.stack)
+    callback(error)
   })
-};
+}
 
-exports.handler({
-  Records: [
-    {
-      Sns: {
-        Message: JSON.stringify({
-          run: "arn:aws:inspector:ap-northeast-1:822761295011:target/0-QmxHBEmn/template/0-DhipW6wY/run/0-2jWnnHKY"
-        })
-      }
-    }
-  ]
-}, {}, (err, data) => {})
+//exports.handler({
+//  Records: [
+//    {
+//      Sns: {
+//        Message: JSON.stringify({
+//          event: "ASSESSMENT_RUN_COMPLETED",
+//          run: "arn:aws:inspector:ap-northeast-1:822761295011:target/0-QmxHBEmn/template/0-DhipW6wY/run/0-2jWnnHKY",
+//          template: "arn:aws:inspector:ap-northeast-1:822761295011:target/0-QmxHBEmn/template/0-DhipW6wY"
+//        })
+//      }
+//    }
+//  ]
+//}, {}, (err, data) => {})
