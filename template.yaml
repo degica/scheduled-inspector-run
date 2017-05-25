@@ -148,4 +148,5 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - inspector:ListFindings
+                  - inspector:DescribeAssessmentTemplates
                 Resource: ['*']
