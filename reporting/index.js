@@ -54,7 +54,7 @@ exports.handler = (event, context, callback) => {
     const params = {
       assessmentRunArns: [message.run],
       filter: {
-        severities: ["High", "Medium"]
+        severities: ["High"]
       },
       maxResults: 500
     }
