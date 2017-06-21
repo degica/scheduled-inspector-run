@@ -92,17 +92,3 @@ exports.handler = (event, context, callback) => {
     callback(error)
   })
 }
-
-//exports.handler({
-//  Records: [
-//    {
-//      Sns: {
-//        Message: JSON.stringify({
-//          event: "ASSESSMENT_RUN_COMPLETED",
-//          run: "arn:aws:inspector:ap-northeast-1:822761295011:target/0-QmxHBEmn/template/0-DhipW6wY/run/0-2jWnnHKY",
-//          template: "arn:aws:inspector:ap-northeast-1:822761295011:target/0-QmxHBEmn/template/0-DhipW6wY"
-//        })
-//      }
-//    }
-//  ]
-//}, {}, (err, data) => {})

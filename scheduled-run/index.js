@@ -28,5 +28,3 @@ exports.handler = (event, context, callback) => {
     callback(error)
   })
 }
-
-exports.handler(null, null, () => {})
